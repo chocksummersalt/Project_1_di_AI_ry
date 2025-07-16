@@ -1,0 +1,1737 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>감성 일기 - AI 기반 감정 분석 일기</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.5/build/d3.layout.cloud.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            /* Unsplash 자연 배경 이미지 사용 */
+            background: linear-gradient(rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)), url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80');
+            
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* 헤더 */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        /* 메인 카드 */
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        /* 네비게이션 */
+        .nav-tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .nav-tab {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            background: none;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        .nav-tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .nav-tab:hover {
+            background: #e9ecef;
+        }
+
+        /* 탭 컨텐츠 */
+        .tab-content {
+            display: none;
+            padding: 40px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* 파일 업로드 */
+        .upload-section {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 60px 20px;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9ff;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8ecff;
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 1.2rem;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .upload-hint {
+            font-size: 0.9rem;
+            color: #999;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        /* 버튼 */
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        /* 로딩 */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 일기 목록 */
+        .diary-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .diary-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            border-left: 4px solid #667eea;
+        }
+
+        .diary-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+        }
+
+        .diary-date {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .diary-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .diary-summary {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        /* 감정 차트 */
+        .emotion-chart {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .emotion-bar {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .emotion-fill {
+            height: 8px;
+            transition: width 0.3s ease;
+        }
+
+        .emotion-good { background: #28a745; }
+        .emotion-normal { background: #ffc107; }
+        .emotion-bad { background: #dc3545; }
+
+        .emotion-label {
+            font-size: 0.8rem;
+            text-align: center;
+            margin-top: 5px;
+            color: #666;
+        }
+
+        /* 통계 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 1rem;
+        }
+
+        /* 모달 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 600px;
+            position: relative;
+        }
+
+        .close {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #aaa;
+        }
+
+        .close:hover {
+            color: #333;
+        }
+
+        /* 알림 */
+        .alert {
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* 반응형 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .nav-tabs {
+                flex-direction: column;
+            }
+            
+            .tab-content {
+                padding: 20px;
+            }
+            
+            .diary-list {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 비밀번호 화면 */
+        .password-screen {
+            display: none;
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .password-form {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        /* 튜토리얼 */
+        .tutorial-screen {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .tutorial-step {
+            display: none;
+            margin-bottom: 30px;
+        }
+
+        .tutorial-step.active {
+            display: block;
+        }
+
+        .tutorial-image {
+            max-width: 300px;
+            height: 200px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+        }
+
+        .tutorial-nav {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        /* 일기 생성 결과 */
+        .diary-result {
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .result-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+
+        .result-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .result-date {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .result-summary {
+            color: #555;
+            line-height: 1.8;
+            margin-bottom: 25px;
+            font-size: 1.1rem;
+        }
+
+        .result-emotions {
+            margin-bottom: 25px;
+        }
+
+        .result-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        /* 일기 카드 개선 */
+        .diary-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            border-left: 4px solid #667eea;
+            cursor: pointer;
+        }
+
+        .diary-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+        }
+
+        .diary-summary {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .diary-summary.expanded {
+            max-height: none;
+        }
+
+        .diary-summary.collapsed {
+            max-height: 80px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .diary-summary.collapsed::after {
+            content: '... 더보기';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: white;
+            color: #667eea;
+            font-weight: 500;
+            cursor: pointer;
+            padding-left: 10px;
+        }
+
+        .diary-summary.expanded::after {
+            content: '접기';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: white;
+            color: #667eea;
+            font-weight: 500;
+            cursor: pointer;
+            padding-left: 10px;
+        }
+
+        /* 배경 설정 */
+        .settings-section {
+            margin-top: 40px;
+            padding: 30px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .background-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .bg-option {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .bg-option:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .bg-option.active {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .bg-preview {
+            width: 80px;
+            height: 60px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .gradient-preview {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .nature-preview {
+            background: linear-gradient(rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8)), url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80');
+        }
+
+        .forest-preview {
+            background: linear-gradient(rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8)), url('https://images.unsplash.com/photo-1441974231531-c6227db76b6e?ixlib=rb-4.0.3&auto=format&fit=crop&w=2071&q=80');
+        }
+
+        .ocean-preview {
+            background: linear-gradient(rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8)), url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?ixlib=rb-4.0.3&auto=format&fit=crop&w=2073&q=80');
+        }
+
+        .mountain-preview {
+            background: linear-gradient(rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8)), url('https://images.unsplash.com/photo-1464822759844-d150baec0134?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80');
+        }
+
+        .abstract-preview {
+            background: linear-gradient(rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8)), url('https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-4.0.3&auto=format&fit=crop&w=2029&q=80');
+        }
+
+        .custom-preview {
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #667eea;
+            font-size: 1.5rem;
+        }
+
+        /* 키워드 클라우드 */
+        .keyword-cloud-container {
+            width: 100%;
+            height: 400px;
+            background: white;
+            border-radius: 15px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #e9ecef;
+            position: relative;
+        }
+
+        .keyword-cloud-container svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .cloud-controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .keyword-word {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .keyword-word:hover {
+            fill: #667eea !important;
+            transform: scale(1.1);
+        }
+
+        .cloud-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #666;
+        }
+
+        .cloud-loading .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 헤더 -->
+        <div class="header">
+            <h1><i class="fas fa-book-open"></i> 감성 일기</h1>
+            <p>AI가 분석하는 당신의 감정 이야기</p>
+        </div>
+
+        <!-- 비밀번호 화면 -->
+        <div class="password-screen" id="passwordScreen">
+            <div class="main-card">
+                <div class="password-form">
+                    <h2 id="passwordTitle">비밀번호 설정</h2>
+                    <p id="passwordSubtitle">일기를 안전하게 보호하기 위한 비밀번호를 설정해주세요.</p>
+                    
+                    <div class="form-group">
+                        <input type="password" id="passwordInput" class="form-control" placeholder="비밀번호를 입력하세요" onkeypress="handleKeyPress(event)">
+                    </div>
+                    
+                    <div class="form-group">
+                        <input type="password" id="confirmPasswordInput" class="form-control" placeholder="비밀번호를 다시 입력하세요" onkeypress="handleKeyPress(event)" style="display: none;">
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="handlePassword()">확인</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 튜토리얼 화면 -->
+        <div class="tutorial-screen" id="tutorialScreen">
+            <div class="main-card">
+                <div class="tutorial-step active" data-step="1">
+                    <h2>환영합니다! 👋</h2>
+                    <p>감성 일기 앱을 사용하는 방법을 안내해드릴게요.</p>
+                    <div class="tutorial-image">
+                        <i class="fas fa-heart" style="font-size: 3rem; color: #667eea;"></i>
+                    </div>
+                </div>
+                
+                <div class="tutorial-step" data-step="2">
+                    <h2>카카오톡 대화 내보내기 📱</h2>
+                    <p>카카오톡에서 대화방을 선택하고 '대화내용 내보내기'를 통해 txt 파일을 다운로드하세요.</p>
+                    <div class="tutorial-image">
+                        <i class="fas fa-file-upload" style="font-size: 3rem; color: #667eea;"></i>
+                    </div>
+                </div>
+                
+                <div class="tutorial-step" data-step="3">
+                    <h2>파일 업로드 📁</h2>
+                    <p>내보낸 txt 파일을 여기에 업로드하면 AI가 자동으로 감정을 분석하고 일기를 생성해드립니다.</p>
+                    <div class="tutorial-image">
+                        <i class="fas fa-robot" style="font-size: 3rem; color: #667eea;"></i>
+                    </div>
+                </div>
+                
+                <div class="tutorial-step" data-step="4">
+                    <h2>감정 분석 📊</h2>
+                    <p>AI가 대화 내용을 분석하여 당신의 감정 상태를 시각화하고 일기로 정리해드립니다.</p>
+                    <div class="tutorial-image">
+                        <i class="fas fa-chart-pie" style="font-size: 3rem; color: #667eea;"></i>
+                    </div>
+                </div>
+                
+                <div class="tutorial-nav">
+                    <button class="btn btn-secondary" onclick="prevTutorialStep()">이전</button>
+                    <button class="btn btn-primary" onclick="nextTutorialStep()">다음</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 메인 앱 -->
+        <div id="mainApp" style="display: none;">
+            <!-- 네비게이션 탭 -->
+            <div class="main-card">
+                <div class="nav-tabs">
+                    <button class="nav-tab active" onclick="showTab('upload')">
+                        <i class="fas fa-upload"></i> 일기 생성
+                    </button>
+                    <button class="nav-tab" onclick="showTab('diaries')">
+                        <i class="fas fa-book"></i> 일기 목록
+                    </button>
+                    <button class="nav-tab" onclick="showTab('stats')">
+                        <i class="fas fa-chart-bar"></i> 통계
+                    </button>
+                </div>
+
+                <!-- 파일 업로드 탭 -->
+                <div id="uploadTab" class="tab-content active">
+                    <div class="upload-section">
+                        <h2>카카오톡 대화로 일기 생성하기</h2>
+                        <p>카카오톡에서 내보낸 txt 파일을 업로드하면 AI가 자동으로 감정을 분석하고 일기를 생성해드립니다.</p>
+                        
+                        <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <div class="upload-text">파일을 클릭하거나 드래그하여 업로드하세요</div>
+                            <div class="upload-hint">지원 형식: .txt (카카오톡 내보내기 파일)</div>
+                        </div>
+                        
+                        <input type="file" id="fileInput" accept=".txt" onchange="handleFileSelect(event)">
+                        
+                        <div class="loading" id="loading">
+                            <div class="spinner"></div>
+                            <p>AI가 일기를 생성하고 있습니다...</p>
+                        </div>
+                        
+                        <!-- 일기 생성 결과 표시 영역 -->
+                        <div id="diaryResult" class="diary-result" style="display: none;">
+                            <h3>생성된 일기</h3>
+                            <div class="result-card">
+                                <div class="result-title" id="resultTitle"></div>
+                                <div class="result-date" id="resultDate"></div>
+                                <div class="result-summary" id="resultSummary"></div>
+                                <div class="result-emotions" id="resultEmotions"></div>
+                                <div class="result-actions">
+                                    <button class="btn btn-primary" onclick="saveAndShowList()">
+                                        <i class="fas fa-save"></i> 일기 저장
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="generateNewDiary()">
+                                        <i class="fas fa-plus"></i> 새 일기 생성
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-success" id="successAlert"></div>
+                        <div class="alert alert-error" id="errorAlert"></div>
+                    </div>
+                </div>
+
+                <!-- 일기 목록 탭 -->
+                <div id="diariesTab" class="tab-content">
+                    <h2>나의 일기 목록</h2>
+                    <div class="diary-list" id="diaryList">
+                        <!-- 일기 카드들이 여기에 동적으로 추가됩니다 -->
+                    </div>
+                </div>
+
+                <!-- 통계 탭 -->
+                <div id="statsTab" class="tab-content">
+                    <h2>감정 통계</h2>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number" id="totalDiaries">0</div>
+                            <div class="stat-label">총 일기 수</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="avgGood">0%</div>
+                            <div class="stat-label">평균 긍정도</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="avgNormal">0%</div>
+                            <div class="stat-label">평균 중립도</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="avgBad">0%</div>
+                            <div class="stat-label">평균 부정도</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 키워드 클라우드 -->
+                    <div class="settings-section">
+                        <h3>키워드 클라우드</h3>
+                        <p>일기에서 자주 등장하는 단어들을 시각화합니다.</p>
+                        <div id="keywordCloud" class="keyword-cloud-container"></div>
+                        <div class="cloud-controls">
+                            <button class="btn btn-primary" onclick="generateKeywordCloud()">
+                                <i class="fas fa-cloud"></i> 키워드 분석
+                            </button>
+                            <button class="btn btn-secondary" onclick="clearKeywordCloud()">
+                                <i class="fas fa-trash"></i> 초기화
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 배경 설정 -->
+                    <div class="settings-section">
+                        <h3>배경 설정</h3>
+                        <div class="background-options">
+                            <button class="bg-option" onclick="changeBackground('gradient')">
+                                <div class="bg-preview gradient-preview"></div>
+                                <span>기본 그라데이션</span>
+                            </button>
+                            <button class="bg-option active" onclick="changeBackground('nature')">
+                                <div class="bg-preview nature-preview"></div>
+                                <span>자연 풍경</span>
+                            </button>
+                            <button class="bg-option" onclick="changeBackground('forest')">
+                                <div class="bg-preview forest-preview"></div>
+                                <span>숲</span>
+                            </button>
+                            <button class="bg-option" onclick="changeBackground('ocean')">
+                                <div class="bg-preview ocean-preview"></div>
+                                <span>바다</span>
+                            </button>
+                            <button class="bg-option" onclick="changeBackground('mountain')">
+                                <div class="bg-preview mountain-preview"></div>
+                                <span>산</span>
+                            </button>
+                            <button class="bg-option" onclick="changeBackground('abstract')">
+                                <div class="bg-preview abstract-preview"></div>
+                                <span>추상적</span>
+                            </button>
+                            <button class="bg-option" onclick="changeBackground('custom')">
+                                <div class="bg-preview custom-preview">
+                                    <i class="fas fa-upload"></i>
+                                </div>
+                                <span>커스텀 이미지</span>
+                                <input type="file" id="customBgInput" accept="image/*" onchange="uploadCustomBackground(event)" style="display: none;">
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 일기 상세 모달 -->
+    <div id="diaryModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle"></h2>
+            <p id="modalDate"></p>
+            <div id="modalSummary"></div>
+            <div id="modalEmotions"></div>
+        </div>
+    </div>
+
+    <script>
+        // 전역 변수
+        let diaries = [];
+        let currentTutorialStep = 1;
+        let isPasswordSet = false;
+        let storedPassword = '';
+        let currentGeneratedDiary = null;
+
+
+
+        // 비밀번호 상태 확인
+        function checkPasswordStatus() {
+            storedPassword = localStorage.getItem('user_password') || '';
+            isPasswordSet = storedPassword.length > 0;
+            
+            if (!isPasswordSet) {
+                showPasswordScreen();
+            } else {
+                showMainApp();
+            }
+        }
+
+        // 비밀번호 화면 표시
+        function showPasswordScreen() {
+            document.getElementById('passwordScreen').style.display = 'block';
+            document.getElementById('mainApp').style.display = 'none';
+            document.getElementById('tutorialScreen').style.display = 'none';
+            
+            if (!isPasswordSet) {
+                document.getElementById('passwordTitle').textContent = '비밀번호 설정';
+                document.getElementById('passwordSubtitle').textContent = '일기를 안전하게 보호하기 위한 비밀번호를 설정해주세요.';
+                document.getElementById('confirmPasswordInput').style.display = 'block';
+            } else {
+                document.getElementById('passwordTitle').textContent = '비밀번호 확인';
+                document.getElementById('passwordSubtitle').textContent = '일기에 접근하기 위해 비밀번호를 입력해주세요.';
+                document.getElementById('confirmPasswordInput').style.display = 'none';
+            }
+        }
+
+        // 비밀번호 처리
+        function handlePassword() {
+            const password = document.getElementById('passwordInput').value;
+            const confirmPassword = document.getElementById('confirmPasswordInput').value;
+            
+            if (!isPasswordSet) {
+                // 비밀번호 설정 모드
+                if (password.length < 4) {
+                    showAlert('비밀번호는 최소 4자 이상이어야 합니다.', 'error');
+                    return;
+                }
+                
+                if (confirmPassword !== password) {
+                    showAlert('비밀번호가 일치하지 않습니다.', 'error');
+                    return;
+                }
+                
+                localStorage.setItem('user_password', password);
+                storedPassword = password;
+                isPasswordSet = true;
+                showAlert('비밀번호가 설정되었습니다.', 'success');
+                setTimeout(() => {
+                    showTutorialScreen();
+                }, 1000);
+            } else {
+                // 비밀번호 확인 모드
+                if (password === storedPassword) {
+                    showMainApp();
+                } else {
+                    showAlert('비밀번호가 올바르지 않습니다.', 'error');
+                }
+            }
+        }
+
+        // 튜토리얼 화면 표시
+        function showTutorialScreen() {
+            document.getElementById('passwordScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'none';
+            document.getElementById('tutorialScreen').style.display = 'block';
+            
+            // 비밀번호 입력 필드 초기화
+            document.getElementById('passwordInput').value = '';
+            document.getElementById('confirmPasswordInput').value = '';
+        }
+
+        // 메인 앱 표시
+        function showMainApp() {
+            document.getElementById('passwordScreen').style.display = 'none';
+            document.getElementById('tutorialScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            
+            // 비밀번호 입력 필드 초기화
+            document.getElementById('passwordInput').value = '';
+        }
+
+        // 튜토리얼 네비게이션
+        function nextTutorialStep() {
+            if (currentTutorialStep < 4) {
+                currentTutorialStep++;
+                updateTutorialStep();
+            } else {
+                showMainApp();
+            }
+        }
+
+        function prevTutorialStep() {
+            if (currentTutorialStep > 1) {
+                currentTutorialStep--;
+                updateTutorialStep();
+            }
+        }
+
+        function updateTutorialStep() {
+            document.querySelectorAll('.tutorial-step').forEach(step => {
+                step.classList.remove('active');
+            });
+            document.querySelector(`[data-step="${currentTutorialStep}"]`).classList.add('active');
+        }
+
+        // 탭 전환
+        function showTab(tabName) {
+            // 모든 탭 비활성화
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // 선택된 탭 활성화
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            
+            // 일기 생성 탭이 아닌 경우 결과 숨김
+            if (tabName !== 'upload') {
+                hideDiaryResult();
+            }
+            
+            // 통계 탭인 경우 통계 업데이트
+            if (tabName === 'stats') {
+                updateStats();
+            }
+        }
+
+        // 파일 선택 처리
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                uploadFile(file);
+            }
+        }
+
+        // 파일 업로드
+        async function uploadFile(file) {
+            if (!file.name.endsWith('.txt')) {
+                showAlert('txt 파일만 업로드 가능합니다.', 'error');
+                return;
+            }
+
+            showLoading(true);
+            hideAlerts();
+            hideDiaryResult();
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('http://localhost:8000/auto-diary', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    currentGeneratedDiary = result;
+                    showDiaryResult(result);
+                    
+                    // 키워드가 있으면 클라우드에 추가
+                    if (result.keywords && result.keywords.length > 0) {
+                        addKeywordsToCloud(result.keywords);
+                    }
+                    
+                    showAlert('일기가 성공적으로 생성되었습니다!', 'success');
+                } else {
+                    const errorData = await response.json();
+                    showAlert(`오류: ${errorData.detail || '알 수 없는 오류가 발생했습니다.'}`, 'error');
+                }
+            } catch (error) {
+                showAlert('서버 연결에 실패했습니다. 서버가 실행 중인지 확인해주세요.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // 일기 결과 표시
+        function showDiaryResult(diaryData) {
+            const resultDiv = document.getElementById('diaryResult');
+            const emotions = diaryData.emotions || { '좋음': 33, '평범함': 34, '나쁨': 33 };
+
+            // 일기 제목 생성
+            const title = diaryData.title || '새로운 일기';
+            document.getElementById('resultTitle').textContent = title;
+            document.getElementById('resultDate').textContent = new Date().toLocaleDateString('ko-KR');
+            
+            // 일기 내용 구성 (5개 섹션을 하나로 합치기)
+            let fullContent = '';
+            if (diaryData.summary) {
+                fullContent += `<h4>📝 요약</h4><p>${diaryData.summary}</p><br>`;
+            }
+            if (diaryData['상황설명']) {
+                fullContent += `<h4>📋 상황 설명</h4><p>${diaryData['상황설명']}</p><br>`;
+            }
+            if (diaryData['감정표현']) {
+                fullContent += `<h4>💭 감정 표현</h4><p>${diaryData['감정표현']}</p><br>`;
+            }
+            if (diaryData['공감과인정']) {
+                fullContent += `<h4>🤗 공감과 인정</h4><p>${diaryData['공감과인정']}</p><br>`;
+            }
+            if (diaryData['따뜻한위로']) {
+                fullContent += `<h4>💕 따뜻한 위로</h4><p>${diaryData['따뜻한위로']}</p><br>`;
+            }
+            if (diaryData['실용적제안']) {
+                fullContent += `<h4>💡 실용적 제안</h4><p>${diaryData['실용적제안']}</p><br>`;
+            }
+            
+            // 내용이 없으면 기본 메시지
+            if (!fullContent) {
+                fullContent = '<p>일기 내용이 없습니다.</p>';
+            }
+            
+            document.getElementById('resultSummary').innerHTML = fullContent;
+            
+            document.getElementById('resultEmotions').innerHTML = `
+                <h4>📊 감정 분석</h4>
+                <div class="emotion-chart">
+                    <div class="emotion-bar">
+                        <div class="emotion-fill emotion-good" style="width: ${emotions['좋음']}%"></div>
+                        <div class="emotion-label">좋음 ${emotions['좋음']}%</div>
+                    </div>
+                    <div class="emotion-bar">
+                        <div class="emotion-fill emotion-normal" style="width: ${emotions['평범함']}%"></div>
+                        <div class="emotion-label">평범함 ${emotions['평범함']}%</div>
+                    </div>
+                    <div class="emotion-bar">
+                        <div class="emotion-fill emotion-bad" style="width: ${emotions['나쁨']}%"></div>
+                        <div class="emotion-label">나쁨 ${emotions['나쁨']}%</div>
+                    </div>
+                </div>
+            `;
+
+            resultDiv.style.display = 'block';
+            
+            // 결과 영역으로 스크롤
+            resultDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // 일기 결과 숨김
+        function hideDiaryResult() {
+            document.getElementById('diaryResult').style.display = 'none';
+        }
+
+        // 일기 저장 및 목록 표시
+        function saveAndShowList() {
+            if (currentGeneratedDiary) {
+                addDiary(currentGeneratedDiary);
+                showTab('diaries');
+                hideDiaryResult();
+                showAlert('일기가 저장되었습니다!', 'success');
+            }
+        }
+
+        // 새 일기 생성
+        function generateNewDiary() {
+            hideDiaryResult();
+            document.getElementById('fileInput').value = '';
+            currentGeneratedDiary = null;
+            showAlert('새로운 일기를 생성할 준비가 되었습니다.', 'success');
+        }
+
+        // 일기 추가
+        function addDiary(diaryData) {
+            // 일기 내용 구성 (5개 섹션을 하나로 합치기)
+            let fullContent = '';
+            if (diaryData.summary) {
+                fullContent += `📝 요약: ${diaryData.summary}\n\n`;
+            }
+            if (diaryData['상황설명']) {
+                fullContent += `📋 상황 설명: ${diaryData['상황설명']}\n\n`;
+            }
+            if (diaryData['감정표현']) {
+                fullContent += `💭 감정 표현: ${diaryData['감정표현']}\n\n`;
+            }
+            if (diaryData['공감과인정']) {
+                fullContent += `🤗 공감과 인정: ${diaryData['공감과인정']}\n\n`;
+            }
+            if (diaryData['따뜻한위로']) {
+                fullContent += `💕 따뜻한 위로: ${diaryData['따뜻한위로']}\n\n`;
+            }
+            if (diaryData['실용적제안']) {
+                fullContent += `💡 실용적 제안: ${diaryData['실용적제안']}\n\n`;
+            }
+            
+            // 내용이 없으면 기본 메시지
+            if (!fullContent) {
+                fullContent = '일기 내용이 없습니다.';
+            }
+
+            const diary = {
+                id: Date.now(),
+                date: new Date(),
+                title: diaryData.title || '새로운 일기',
+                summary: fullContent.trim(),
+                emotions: diaryData.emotions || { '좋음': 33, '평범함': 34, '나쁨': 33 }
+            };
+
+            diaries.unshift(diary);
+            saveDiaries();
+            renderDiaries();
+        }
+
+        // 일기 저장
+        function saveDiaries() {
+            localStorage.setItem('diaries', JSON.stringify(diaries));
+        }
+
+        // 일기 로드
+        function loadDiaries() {
+            const saved = localStorage.getItem('diaries');
+            if (saved) {
+                diaries = JSON.parse(saved);
+                diaries.forEach(diary => {
+                    diary.date = new Date(diary.date);
+                });
+            } else {
+                // 더미 데이터
+                diaries = [
+                    {
+                        id: 1,
+                        date: new Date(Date.now() - 86400000),
+                        title: '어제의 일기',
+                        summary: '오늘은 정말 좋은 하루였습니다. 새로운 것을 배우고 성장하는 느낌이 들었어요.',
+                        emotions: { '좋음': 70, '평범함': 20, '나쁨': 10 }
+                    },
+                    {
+                        id: 2,
+                        date: new Date(Date.now() - 172800000),
+                        title: '2일 전의 일기',
+                        summary: '평범한 하루였지만, 작은 기쁨들을 발견할 수 있었습니다.',
+                        emotions: { '좋음': 30, '평범함': 60, '나쁨': 10 }
+                    }
+                ];
+                saveDiaries();
+            }
+            renderDiaries();
+        }
+
+        // 일기 렌더링
+        function renderDiaries() {
+            const diaryList = document.getElementById('diaryList');
+            diaryList.innerHTML = '';
+
+            diaries.forEach(diary => {
+                const diaryCard = document.createElement('div');
+                diaryCard.className = 'diary-card';
+
+                const dateStr = diary.date.toLocaleDateString('ko-KR');
+                const emotions = diary.emotions;
+                const summaryId = `summary-${diary.id}`;
+
+                diaryCard.innerHTML = `
+                    <div class="diary-date">${dateStr}</div>
+                    <div class="diary-title">${diary.title}</div>
+                    <div class="diary-summary collapsed" id="${summaryId}" onclick="toggleSummary('${summaryId}')">
+                        ${diary.summary}
+                    </div>
+                    <div class="emotion-chart">
+                        <div class="emotion-bar">
+                            <div class="emotion-fill emotion-good" style="width: ${emotions['좋음']}%"></div>
+                            <div class="emotion-label">좋음 ${emotions['좋음']}%</div>
+                        </div>
+                        <div class="emotion-bar">
+                            <div class="emotion-fill emotion-normal" style="width: ${emotions['평범함']}%"></div>
+                            <div class="emotion-label">평범함 ${emotions['평범함']}%</div>
+                        </div>
+                        <div class="emotion-bar">
+                            <div class="emotion-fill emotion-bad" style="width: ${emotions['나쁨']}%"></div>
+                            <div class="emotion-label">나쁨 ${emotions['나쁨']}%</div>
+                        </div>
+                    </div>
+                `;
+
+                diaryList.appendChild(diaryCard);
+            });
+        }
+
+        // 요약 토글 함수
+        function toggleSummary(summaryId) {
+            const summaryElement = document.getElementById(summaryId);
+            if (summaryElement.classList.contains('collapsed')) {
+                summaryElement.classList.remove('collapsed');
+                summaryElement.classList.add('expanded');
+            } else {
+                summaryElement.classList.remove('expanded');
+                summaryElement.classList.add('collapsed');
+            }
+        }
+
+        // 일기 모달 표시
+        function showDiaryModal(diary) {
+            const modal = document.getElementById('diaryModal');
+            const emotions = diary.emotions;
+
+            document.getElementById('modalTitle').textContent = diary.title;
+            document.getElementById('modalDate').textContent = diary.date.toLocaleDateString('ko-KR');
+            document.getElementById('modalSummary').textContent = diary.summary;
+            
+            document.getElementById('modalEmotions').innerHTML = `
+                <h3>감정 분석</h3>
+                <div class="emotion-chart">
+                    <div class="emotion-bar">
+                        <div class="emotion-fill emotion-good" style="width: ${emotions['좋음']}%"></div>
+                        <div class="emotion-label">좋음 ${emotions['좋음']}%</div>
+                    </div>
+                    <div class="emotion-bar">
+                        <div class="emotion-fill emotion-normal" style="width: ${emotions['평범함']}%"></div>
+                        <div class="emotion-label">평범함 ${emotions['평범함']}%</div>
+                    </div>
+                    <div class="emotion-bar">
+                        <div class="emotion-fill emotion-bad" style="width: ${emotions['나쁨']}%"></div>
+                        <div class="emotion-label">나쁨 ${emotions['나쁨']}%</div>
+                    </div>
+                </div>
+            `;
+
+            modal.style.display = 'block';
+        }
+
+        // 모달 닫기
+        function closeModal() {
+            document.getElementById('diaryModal').style.display = 'none';
+        }
+
+        // 통계 업데이트
+        function updateStats() {
+            document.getElementById('totalDiaries').textContent = diaries.length;
+            
+            if (diaries.length === 0) {
+                document.getElementById('avgGood').textContent = '0%';
+                document.getElementById('avgNormal').textContent = '0%';
+                document.getElementById('avgBad').textContent = '0%';
+                return;
+            }
+
+            const totalGood = diaries.reduce((sum, diary) => sum + diary.emotions['좋음'], 0);
+            const totalNormal = diaries.reduce((sum, diary) => sum + diary.emotions['평범함'], 0);
+            const totalBad = diaries.reduce((sum, diary) => sum + diary.emotions['나쁨'], 0);
+
+            document.getElementById('avgGood').textContent = Math.round(totalGood / diaries.length) + '%';
+            document.getElementById('avgNormal').textContent = Math.round(totalNormal / diaries.length) + '%';
+            document.getElementById('avgBad').textContent = Math.round(totalBad / diaries.length) + '%';
+        }
+
+        // 로딩 표시/숨김
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        // 알림 표시
+        function showAlert(message, type) {
+            const alert = document.getElementById(type === 'success' ? 'successAlert' : 'errorAlert');
+            alert.textContent = message;
+            alert.style.display = 'block';
+            
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+
+        // 알림 숨김
+        function hideAlerts() {
+            document.getElementById('successAlert').style.display = 'none';
+            document.getElementById('errorAlert').style.display = 'none';
+        }
+
+        // 드래그 앤 드롭
+        const uploadArea = document.getElementById('uploadArea');
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                uploadFile(files[0]);
+            }
+        });
+
+        // Enter 키 처리
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                handlePassword();
+            }
+        }
+
+        // 배경 변경 함수
+        function changeBackground(type) {
+            // 모든 옵션에서 active 클래스 제거
+            document.querySelectorAll('.bg-option').forEach(option => {
+                option.classList.remove('active');
+            });
+            
+            // 선택된 옵션에 active 클래스 추가
+            event.target.closest('.bg-option').classList.add('active');
+            
+            // 배경 변경
+            const body = document.body;
+            
+            switch(type) {
+                case 'gradient':
+                    body.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                    body.style.backgroundSize = 'cover';
+                    body.style.backgroundPosition = 'center';
+                    body.style.backgroundAttachment = 'fixed';
+                    body.style.backgroundRepeat = 'no-repeat';
+                    break;
+                    
+                case 'nature':
+                    body.style.background = 'linear-gradient(rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)), url("https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80")';
+                    body.style.backgroundSize = 'cover';
+                    body.style.backgroundPosition = 'center';
+                    body.style.backgroundAttachment = 'fixed';
+                    body.style.backgroundRepeat = 'no-repeat';
+                    break;
+                    
+                case 'forest':
+                    body.style.background = 'linear-gradient(rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)), url("https://images.unsplash.com/photo-1441974231531-c6227db76b6e?ixlib=rb-4.0.3&auto=format&fit=crop&w=2071&q=80")';
+                    body.style.backgroundSize = 'cover';
+                    body.style.backgroundPosition = 'center';
+                    body.style.backgroundAttachment = 'fixed';
+                    body.style.backgroundRepeat = 'no-repeat';
+                    break;
+                    
+                case 'ocean':
+                    body.style.background = 'linear-gradient(rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)), url("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?ixlib=rb-4.0.3&auto=format&fit=crop&w=2073&q=80")';
+                    body.style.backgroundSize = 'cover';
+                    body.style.backgroundPosition = 'center';
+                    body.style.backgroundAttachment = 'fixed';
+                    body.style.backgroundRepeat = 'no-repeat';
+                    break;
+                    
+                case 'mountain':
+                    body.style.background = 'linear-gradient(rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)), url("https://images.unsplash.com/photo-1464822759844-d150baec0134?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80")';
+                    body.style.backgroundSize = 'cover';
+                    body.style.backgroundPosition = 'center';
+                    body.style.backgroundAttachment = 'fixed';
+                    body.style.backgroundRepeat = 'no-repeat';
+                    break;
+                    
+                case 'abstract':
+                    body.style.background = 'linear-gradient(rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)), url("https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-4.0.3&auto=format&fit=crop&w=2029&q=80")';
+                    body.style.backgroundSize = 'cover';
+                    body.style.backgroundPosition = 'center';
+                    body.style.backgroundAttachment = 'fixed';
+                    body.style.backgroundRepeat = 'no-repeat';
+                    break;
+                    
+                case 'custom':
+                    document.getElementById('customBgInput').click();
+                    break;
+            }
+            
+            // 설정 저장
+            localStorage.setItem('background_type', type);
+        }
+
+        // 커스텀 배경 업로드
+        function uploadCustomBackground(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const body = document.body;
+                    body.style.background = `linear-gradient(rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.2)), url("${e.target.result}")`;
+                    body.style.backgroundSize = 'cover';
+                    body.style.backgroundPosition = 'center';
+                    body.style.backgroundAttachment = 'fixed';
+                    body.style.backgroundRepeat = 'no-repeat';
+                    
+                    // 설정 저장
+                    localStorage.setItem('background_type', 'custom');
+                    localStorage.setItem('custom_background', e.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // 저장된 배경 설정 로드
+        function loadBackgroundSettings() {
+            const savedType = localStorage.getItem('background_type');
+            if (savedType) {
+                changeBackground(savedType);
+                
+                // 커스텀 배경인 경우
+                if (savedType === 'custom') {
+                    const customBg = localStorage.getItem('custom_background');
+                    if (customBg) {
+                        const body = document.body;
+                        body.style.background = `linear-gradient(rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)), url("${customBg}")`;
+                        body.style.backgroundSize = 'cover';
+                        body.style.backgroundPosition = 'center';
+                        body.style.backgroundAttachment = 'fixed';
+                        body.style.backgroundRepeat = 'no-repeat';
+                    }
+                }
+            }
+        }
+
+        // 키워드 클라우드 관련 변수
+        let keywordCloudData = [];
+
+        // 일기에서 추출된 키워드를 클라우드에 추가
+        function addKeywordsToCloud(keywords) {
+            keywords.forEach(keyword => {
+                // 기존 키워드가 있는지 확인
+                const existingKeyword = keywordCloudData.find(k => k.text === keyword);
+                if (existingKeyword) {
+                    // 기존 키워드가 있으면 크기 증가
+                    existingKeyword.size = Math.min(60, existingKeyword.size + 3);
+                } else {
+                    // 새로운 키워드 추가
+                    keywordCloudData.push({
+                        text: keyword,
+                        size: 15
+                    });
+                }
+            });
+            
+            // 키워드 클라우드 데이터 저장
+            localStorage.setItem('keywordCloudData', JSON.stringify(keywordCloudData));
+            
+            // 클라우드가 이미 표시되어 있다면 업데이트
+            const container = document.getElementById('keywordCloud');
+            if (container.querySelector('svg')) {
+                updateKeywordCloud();
+            }
+        }
+
+        // 키워드 클라우드 업데이트
+        function updateKeywordCloud() {
+            const container = document.getElementById('keywordCloud');
+            if (keywordCloudData.length === 0) {
+                container.innerHTML = '<p>키워드 클라우드를 생성해주세요.</p>';
+                return;
+            }
+
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // 기존 SVG 제거
+            d3.select(container).selectAll('svg').remove();
+
+            const svg = d3.select(container)
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            const g = svg.append('g')
+                .attr('transform', `translate(${width/2},${height/2})`);
+
+            const layout = d3.layout.cloud()
+                .size([width, height])
+                .words(keywordCloudData)
+                .padding(5)
+                .rotate(() => ~~(Math.random() * 2) * 90)
+                .font('Noto Sans KR')
+                .fontSize(d => d.size)
+                .on('end', draw);
+
+            layout.start();
+
+            function draw(words) {
+                g.selectAll('text')
+                    .data(words)
+                    .enter().append('text')
+                    .style('font-size', d => d.size + 'px')
+                    .style('font-family', 'Noto Sans KR')
+                    .style('fill', () => d3.schemeCategory10[Math.floor(Math.random() * 10)])
+                    .attr('text-anchor', 'middle')
+                    .attr('transform', d => `translate(${d.x},${d.y})rotate(${d.rotate})`)
+                    .text(d => d.text)
+                    .classed('keyword-word', true)
+                    .on('click', function(d) {
+                        showKeywordInfo(d);
+                    });
+            }
+        }
+
+        // 키워드 추출 함수
+        function extractKeywords(text) {
+            // 불용어 목록 (한국어)
+            const stopWords = [
+                '이', '가', '을', '를', '의', '에', '에서', '로', '으로', '와', '과', '도', '만', '은', '는', '이', '그', '저', '우리', '나', '너', '그것', '이것', '저것',
+                '있다', '없다', '하다', '되다', '있다', '없다', '그리고', '하지만', '또는', '그래서', '그런데', '그러나', '그리고', '또한', '또는', '그러나', '하지만',
+                '오늘', '어제', '내일', '지금', '이제', '그때', '언제', '어디', '어떻게', '왜', '무엇', '누가', '어떤', '몇', '얼마', '어느', '무슨', '어떤', '어떻게',
+                '정말', '매우', '너무', '아주', '조금', '약간', '조금', '많이', '적게', '크게', '작게', '빨리', '천천히', '잘', '못', '좋다', '나쁘다', '크다', '작다',
+                '새로운', '오래된', '좋은', '나쁜', '큰', '작은', '많은', '적은', '빠른', '느린', '높은', '낮은', '따뜻한', '차가운', '밝은', '어두운'
+            ];
+
+            // 텍스트 정리
+            let cleanText = text.replace(/[^\w\s가-힣]/g, ' ').toLowerCase();
+            
+            // 단어 분리
+            let words = cleanText.split(/\s+/).filter(word => 
+                word.length > 1 && 
+                !stopWords.includes(word) && 
+                !/^\d+$/.test(word) && 
+                !/^[a-zA-Z]+$/.test(word)
+            );
+
+            // 단어 빈도 계산
+            let wordCount = {};
+            words.forEach(word => {
+                wordCount[word] = (wordCount[word] || 0) + 1;
+            });
+
+            // 빈도순으로 정렬하고 상위 30개 선택
+            let sortedWords = Object.entries(wordCount)
+                .sort(([,a], [,b]) => b - a)
+                .slice(0, 30)
+                .map(([word, count]) => ({
+                    text: word,
+                    size: Math.max(12, Math.min(60, 12 + count * 3))
+                }));
+
+            return sortedWords;
+        }
+
+        // 키워드 클라우드 생성
+        function generateKeywordCloud() {
+            if (diaries.length === 0) {
+                showAlert('분석할 일기가 없습니다. 먼저 일기를 작성해주세요.', 'error');
+                return;
+            }
+
+            const container = document.getElementById('keywordCloud');
+            container.innerHTML = `
+                <div class="cloud-loading">
+                    <div class="spinner"></div>
+                    <p>키워드를 분석하고 있습니다...</p>
+                </div>
+            `;
+
+            // 모든 일기 내용 합치기
+            let allText = diaries.map(diary => diary.summary).join(' ');
+            
+            // 키워드 추출
+            keywordCloudData = extractKeywords(allText);
+
+            if (keywordCloudData.length === 0) {
+                container.innerHTML = '<p>분석할 키워드가 없습니다.</p>';
+                return;
+            }
+
+            // 클라우드 생성
+            updateKeywordCloud();
+        }
+
+        // 키워드 정보 표시
+        function showKeywordInfo(keyword) {
+            const count = keywordCloudData.find(k => k.text === keyword.text)?.size || 0;
+            const normalizedSize = Math.max(1, Math.round((count - 12) / 3));
+            
+            showAlert(`"${keyword.text}" - ${normalizedSize}회 등장`, 'success');
+        }
+
+        // 키워드 클라우드 초기화
+        function clearKeywordCloud() {
+            const container = document.getElementById('keywordCloud');
+            container.innerHTML = '<p>키워드 클라우드를 생성해주세요.</p>';
+            keywordCloudData = [];
+            localStorage.removeItem('keywordCloudData');
+        }
+
+        // 키워드 클라우드 데이터 로드
+        function loadKeywordCloudData() {
+            const savedData = localStorage.getItem('keywordCloudData');
+            if (savedData) {
+                try {
+                    keywordCloudData = JSON.parse(savedData);
+                } catch (e) {
+                    console.error('키워드 클라우드 데이터 로드 실패:', e);
+                    keywordCloudData = [];
+                }
+            }
+        }
+
+        // 앱 초기화 시 배경 설정 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            checkPasswordStatus();
+            loadDiaries();
+            loadBackgroundSettings();
+        });
+
+        // 모달 외부 클릭 시 닫기
+        window.onclick = function(event) {
+            const modal = document.getElementById('diaryModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html>
